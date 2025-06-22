@@ -12,6 +12,7 @@ from components.theme_check import check_theme_difference
 from components.visualise import visualize_report_differences
 from components.semantic import semantic_summary
 from components.explainer import explain_ui_mismatches
+from components.generate_report import generate_json_report
 
 st.set_page_config(page_title="⚙️ Diffy UI Validator", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
@@ -115,5 +116,16 @@ if golden_file and actual_file:
     except Exception as e:
         st.error(f"❌ Failed to generate explanation: {str(e)}")
 
+    st.subheader("📦 Download JSON Report")
+    try:
+        json_bytes = generate_json_report(report)
+        st.download_button(
+            label="⬇️ Download Mismatch Report (JSON)",
+            data=json_bytes,
+            file_name="diffy_mismatch_report.json",
+            mime="application/json"
+        )
+    except Exception as e:
+        st.error(f"❌ Could not generate downloadable JSON: {str(e)}")
 else:
     st.info("📂 Please upload both screenshots above to get started.")

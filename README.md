@@ -13,7 +13,7 @@ Diffy automates the comparison between golden/reference UI screenshots and actua
 
 ## 🚀 Demo Video & Live Pitch
 
-📽️ [60-second demo video](#)  
+📽️ [60-second demo video](https://drive.google.com/file/d/1G55l4D3xn2-Kune8iwAdB7zTYKc4b_Zy/view?usp=share_link)  
 🧾 [Pitch Deck Presentation](#)  
 📑 [Full Project Report PDF](#)
 
