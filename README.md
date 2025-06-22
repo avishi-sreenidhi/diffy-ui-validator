@@ -34,6 +34,10 @@ Diffy automates the comparison between golden/reference UI screenshots and actua
 
 ---
 
+## 🔍 Output Preview
+![Mismatch](assets/example.png)
+![Mismatch Explanation](assets/LLM_inference.png)
+
 ## 🛠️ Tech Stack
 
 | Component            | Tech / Tool                                      |
