@@ -79,7 +79,7 @@ pip install -r requirements.txt
 
 ### 4. Set Up API Keys
 
-This project uses GPT-4o and other LLM APIs. Make sure to set your environment variables:
+This project uses OpenAI and roboflow APIs. Make sure to set your environment variables:
 
 ```bash
 # In terminal or .env file (if using python-dotenv)
