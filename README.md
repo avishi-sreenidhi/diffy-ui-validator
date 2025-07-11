@@ -84,6 +84,8 @@ This project uses OpenAI and roboflow APIs. Make sure to set your environment va
 ```bash
 # In terminal or .env file (if using python-dotenv)
 export OPENAI_API_KEY=your_key_here
+export ROBOFLOW_API_KEY=your_key_here
+export hugging_face_token=your_key_here
 ```
 
 ### 5. Run the Streamlit App
