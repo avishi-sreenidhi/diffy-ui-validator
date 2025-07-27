@@ -14,6 +14,7 @@ from components.semantic import semantic_summary
 from components.explainer import explain_ui_mismatches
 from components.generate_report import generate_json_report
 
+# ---- Page Config ----
 st.set_page_config(page_title="⚙️ Diffy UI Validator", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
 <style>
@@ -41,6 +42,7 @@ h1 {
 st.title("⚙️ Diffy! Validate your screenshot in a click")
 st.markdown("Upload a **Golden** and an **Actual** screenshot to visually highlight UI component differences.")
 
+# ---- Image Upload ----
 col_golden, col_actual = st.columns(2)
 with col_golden:
     golden_file = st.file_uploader("Golden Screenshot", type=["png", "jpg", "jpeg"])
@@ -51,6 +53,7 @@ def load_image(file):
     file_bytes = np.asarray(bytearray(file.read()), dtype=np.uint8)
     return cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
+# ---- Processing ----
 if golden_file and actual_file:
     golden_img = load_image(golden_file)
     actual_img = load_image(actual_file)
@@ -102,20 +105,26 @@ if golden_file and actual_file:
         st.markdown("**Actual Screenshot (Annotated)**")
         st.image(actual_overlay, use_container_width=True)
 
-    try:
-        with st.spinner("📖 Generating LLM explanation..."):
-            semantic_summary = semantic_summary(actual_img)
-            explanation = explain_ui_mismatches(
-                semantic_meaning=semantic_summary,
-                results=report,
-                golden_img=golden_img,
-                actual_img=actual_img
-            )
-            st.subheader("🧾 Mismatch Explanation")
-            st.markdown(explanation)
-    except Exception as e:
-        st.error(f"❌ Failed to generate explanation: {str(e)}")
+    # ---- LLM Explanation via Button ----
+    st.subheader("🧾 Mismatch Explanation")
+    if st.button("💬 Generate Explanation using GPT"):
+        try:
+            with st.spinner("📖 Generating LLM explanation..."):
+                semantic_meaning = semantic_summary(actual_img)
+                explanation = explain_ui_mismatches(
+                    semantic_meaning=semantic_meaning,
+                    results=report,
+                    golden_img=golden_img,
+                    actual_img=actual_img
+                )
+                st.markdown(explanation)
+        except Exception as e:
+            st.error(f"❌ Failed to generate explanation: {str(e)}")
+    else:
+        st.info("👉 Click the button above to generate a GPT-powered explanation of the mismatches.")
 
+
+    # ---- JSON Download ----
     st.subheader("📦 Download JSON Report")
     try:
         json_bytes = generate_json_report(report)
@@ -127,5 +136,6 @@ if golden_file and actual_file:
         )
     except Exception as e:
         st.error(f"❌ Could not generate downloadable JSON: {str(e)}")
+
 else:
     st.info("📂 Please upload both screenshots above to get started.")
