@@ -106,7 +106,6 @@ def hungarian_match_components(golden, actual, match_threshold=0.85):
             if g.get("embedding_fused") is not None and a.get("embedding_fused") is not None:
                 emb_sim = compute_cosine_similarity(g["embedding_fused"], a["embedding_fused"])
                 txt_sim = text_similarity(g.get("text", ""), a.get("text", ""))
-                pos_dist = bbox_center_distance(g["bbox"], a["bbox"])
                 iou = bbox_iou(g["bbox"], a["bbox"])
                 type_sim = 1 + type_penalty(g.get("type", ""), a.get("type", ""))
 
@@ -132,7 +131,6 @@ def hungarian_match_components(golden, actual, match_threshold=0.85):
                 "golden": golden[i],
                 "actual": actual[j],
                 "embedding_similarity": round(sim_score, 4),
-                "position_distance": round(bbox_center_distance(golden[i]["bbox"], actual[j]["bbox"]), 2),
                 "iou": round(bbox_iou(golden[i]["bbox"], actual[j]["bbox"]), 4),
                 "text_similarity": round(text_similarity(golden[i].get("text", ""), actual[j].get("text", "")), 4)
             })
