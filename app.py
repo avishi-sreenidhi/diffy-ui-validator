@@ -40,14 +40,14 @@ h1 {
 """, unsafe_allow_html=True)
 
 st.title("⚙️ Diffy! Validate your screenshot in a click")
-st.markdown("Upload a **Golden** and an **Actual** screenshot to visually highlight UI component differences.")
+st.markdown("Upload a **Baseline** and a **Rendered** screenshot to visually highlight UI component differences.")
 
 # ---- Image Upload ----
 col_golden, col_actual = st.columns(2)
 with col_golden:
-    golden_file = st.file_uploader("Golden Screenshot", type=["png", "jpg", "jpeg"])
+    golden_file = st.file_uploader("Baseline Screenshot", type=["png", "jpg", "jpeg"])
 with col_actual:
-    actual_file = st.file_uploader("Actual Screenshot", type=["png", "jpg", "jpeg"])
+    actual_file = st.file_uploader("Rendered Screenshot", type=["png", "jpg", "jpeg"])
 
 def load_image(file):
     file_bytes = np.asarray(bytearray(file.read()), dtype=np.uint8)
@@ -98,11 +98,11 @@ if golden_file and actual_file:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**Golden Screenshot (Annotated)**")
+        st.markdown("**Baseline Screenshot (Annotated)**")
         st.image(golden_overlay, use_container_width=True)
 
     with col2:
-        st.markdown("**Actual Screenshot (Annotated)**")
+        st.markdown("**Rendered Screenshot (Annotated)**")
         st.image(actual_overlay, use_container_width=True)
 
     # ---- LLM Explanation via Button ----

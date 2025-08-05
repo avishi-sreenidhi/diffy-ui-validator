@@ -1,8 +1,20 @@
 import json
 import cv2
 import base64
-from openai import OpenAI
 import os
+from openai import OpenAI
+
+
+def encode_cv2_image(img):
+    _, buffer = cv2.imencode('.png', img)
+    return base64.b64encode(buffer).decode('utf-8')
+
+
+def simplify_entry(entry):
+    # Keep only relevant fields for LLM
+    allowed_keys = ['text', 'component', 'mismatch_type', 'delta', 'expected', 'actual', 'bbox']
+    return {k: v for k, v in entry.items() if k in allowed_keys}
+
 
 def explain_ui_mismatches(
     semantic_meaning: str,
@@ -12,123 +24,95 @@ def explain_ui_mismatches(
     model_id: str = "gpt-4o"
 ) -> str:
     """
-    Sends UI semantic meaning, mismatch data, and optionally golden/actual screenshots
-    as in-memory cv2 images to OpenAI GPT-4o for structured UI mismatch analysis.
+    Uses GPT-4o to generate developer-friendly explanations of UI mismatches
+    with pixel-level and color-specific suggestions.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    theme_issue = results.get("overall_theme_issue", "No issue")
-
-    # Always send all mismatches; let the LLM verify if theme issue is legit
-    mismatched = [m for m in results.get("matches", []) if m.get("mismatch_type")]
+    # Extract core fields
+    theme_flag = results.get("overall_theme_issue", "No issue")
+    matches = results.get("matches", [])
     unmatched_golden = results.get("unmatched_golden", [])
     unmatched_actual = results.get("unmatched_actual", [])
 
-    #  Token-safe truncation and simplification logic
-    MAX_MISMATCHES = 15
-    MAX_UNMATCHED = 10
+    # Trim lists to avoid token overload
+    simplified_matches = [simplify_entry(m) for m in matches if m.get("mismatch_type")][:15]
+    simplified_unmatched_golden = [simplify_entry(u) for u in unmatched_golden][:10]
+    simplified_unmatched_actual = [simplify_entry(u) for u in unmatched_actual][:10]
 
-    def simplify_entry(entry):
-        allowed_keys = ['component', 'mismatch_type', 'delta', 'expected', 'actual']
-        return {k: v for k, v in entry.items() if k in allowed_keys}
+    messages = []
 
-    mismatched = [simplify_entry(m) for m in mismatched[:MAX_MISMATCHES]]
-    unmatched_golden = [simplify_entry(u) for u in unmatched_golden[:MAX_UNMATCHED]]
-    unmatched_actual = [simplify_entry(u) for u in unmatched_actual[:MAX_UNMATCHED]]
-
-    include_images = (golden_img is not None and actual_img is not None)
-
-    def encode_cv2_image(img):
-        _, buffer = cv2.imencode('.png', img)
-        return base64.b64encode(buffer).decode('utf-8')
-
-    image_messages = []
-    if include_images:
-        golden_b64 = encode_cv2_image(golden_img)
-        actual_b64 = encode_cv2_image(actual_img)
-
-        image_messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "This is the **golden (design) screenshot**."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{golden_b64}"}}
-                ]
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "This is the **actual (rendered) UI screenshot**."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{actual_b64}"}}
-                ]
-            }
-        ]
-
+    # --- System Prompt ---
     system_prompt = """
-You are a UI validation assistant.
+You are a UI regression validation assistant helping QA engineers and frontend developers fix mismatches.
 
-You receive:
-- The semantic intent of a UI screen
-- A dictionary of mismatch metadata (matches, unmatched elements, theme detection)
-- Screenshots of the golden design and actual UI
+You are given:
+- A screen purpose
+- Theme flag (dark/light mismatch, etc.)
+- UI metadata (component type, text, bounding boxes, colors, class, etc.)
+- Optional screenshots
 
-Your responsibilities:
+Your job is to:
+1. **Theme Verification**: Validate if theme differences are real using images and metadata. Mention only if relevant.
+2. **Mismatch Detection**: Confirm mismatches using text, bbox, visual cues, and color. Use screenshot only if metadata is ambiguous.
+3. **Clarity**: Explain mismatches clearly (e.g., *Text changed from “COLD BREWS” to “COFFEE BREWS”* or *Button shifted right by 42px*).
+4. **Missing Components**: If a component from the design is missing in render (especially text content), flag it clearly.
+5. **Developer-Focused Fix Suggestions**: Provide **explicit, actionable suggestions**, e.g.:
+    - “Shift button 24px to the left (from x=320 to x=296)”
+    - “Change text color from `#F5F5F5` to `#000000`”
+    - “Add missing text block: ‘Your perfect drink is just a few clicks away’ at y=1600”
 
-1. **Theme Validation**:
-    - If a theme difference flag is set, check screenshots.
-    - If valid (e.g., dark vs light mode), mention it and ignore superficial stylistic mismatches caused by theme. Dont proceed to any other component checks.
-    - If invalid, treat theme flag as noise.
-
-2. **Mismatch Validation**:
-    - For every mismatch in the "matches" list:
-        - Describe clearly what needs to be changed (colors, positions, etc.) What hexcode changes, pixel shifts from the heuristics provided
-
-3. **Image-based Verification for Unmatched Elements/Missing/Extra Elements**:
-    - For each element in `unmatched_golden` and `unmatched_actual`:
-        - Use screenshots to verify whether it is **truly missing or extra**.
-         - Only report unmatched elements that are **actually absent/present in the screenshot**.
-        - If the element **does appear visually**, it's a **false positive** → Do NOT report it.
-       
-4. **Output Format**:
-    - Group findings concisely and in order. Verify with the images if the issue is really present and use the metadata
-    to present accurate reports, proposed solutions and next actions.
-         False Positives (if any)
-    - Provide solutions to developers and QA testers to assist them concisely. Avoid repeating raw JSON or stating trivial confirmations (like “username field exists” unless it causes layout issues).
+Output Format:
+- Verified Mismatches
+- Missing Components
+- Extra Components
+- Suggested Fixes
 """
+    messages.append({"role": "system", "content": system_prompt.strip()})
 
+    # --- User Prompt ---
     user_prompt = f"""
 Screen Purpose: {semantic_meaning}
-
-Theme Flag: {theme_issue}
+Theme Flag: {theme_flag}
 
 Mismatched Components:
-{json.dumps(mismatched, indent=2)}
+{json.dumps(simplified_matches, indent=2)}
 
-Unmatched Golden Elements (design says these exist, actual might not):
-{json.dumps(unmatched_golden, indent=2)}
+Missing from Rendered UI:
+{json.dumps(simplified_unmatched_golden, indent=2)}
 
-Unmatched Actual Elements (actual UI has extra components not in design):
-{json.dumps(unmatched_actual, indent=2)}
+Extra in Rendered UI:
+{json.dumps(simplified_unmatched_actual, indent=2)}
 
-Your Tasks:
-- Use screenshots to validate theme flag.
-- For unmatched components, visually confirm presence/absence this is very important. Ignore false positives.
-- Categorize and describe real mismatches with clear recommendations.
-- Where heuristics (pixel positions or deltas) are provided in the mismatch metadata, use them to report precise positional or size changes, color etc
+Pay special attention to textual content, bounding box coordinates (x, y, width, height), and color values (if available in `expected` / `actual`). Your suggestions should be helpful to frontend developers aiming for pixel-perfect design.
 """
+    messages.append({"role": "user", "content": user_prompt.strip()})
 
+    # --- Image Messages (if available) ---
+    if golden_img is not None and actual_img is not None:
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Baseline (design) screenshot:"},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encode_cv2_image(golden_img)}"}}
+            ]
+        })
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Rendered (actual) UI screenshot:"},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encode_cv2_image(actual_img)}"}}
+            ]
+        })
+
+    # --- LLM Completion ---
     try:
-        messages = [{"role": "system", "content": system_prompt.strip()}]
-        messages.append({"role": "user", "content": user_prompt.strip()})
-        if include_images:
-            messages.extend(image_messages)
-
         response = client.chat.completions.create(
             model=model_id,
             messages=messages,
-            temperature=0.3,
+            temperature=0.3
         )
         return response.choices[0].message.content
 
     except Exception as e:
-        raise RuntimeError(f"API call failed: {str(e)}")
+        raise RuntimeError(f"LLM explanation failed: {str(e)}")

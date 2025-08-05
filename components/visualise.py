@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 
 GREEN = (0, 255, 0)     
-RED = (147, 20, 255)    
-YELLOW = (0, 255, 255)  
-ORANGE = (0, 165, 255)  
+RED = (255, 0, 0)    
+YELLOW = (255, 255, 0)  # missing 
+ORANGE = (255, 165, 0)  # extra 
 
 BOX_THICKNESS = 3
 
